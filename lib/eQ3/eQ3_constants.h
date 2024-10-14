@@ -33,11 +33,13 @@ typedef enum {
 } CommandType;
 
 typedef enum {
+    STATUSPENDING = -1,
     UNKNOWN = 0,
     MOVING = 1,
     UNLOCKED = 2,
     LOCKED = 3,
-    OPENED = 4
+    OPENED = 4,
+    TIMEOUT = 9
 } LockStatus;
 
 #endif //DOOR_OPENER_CONST_H

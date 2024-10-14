@@ -8,7 +8,7 @@
 #include "PubSubClient.h"
 #include <esp_wifi.h>
 #include <WiFiClient.h>
-#include <BLEDevice.h>
+#include <NimBLEDevice.h>
 #include <WebServer.h>
 #include <FS.h>
 #include <SPIFFS.h>
@@ -40,7 +40,7 @@ AutoConnect Portal(Server);
 AutoConnectConfig config;
 fs::SPIFFSFS& FlashFS = SPIFFS;
 
-eQ3* keyble;
+eQ3* keyble = NULL;
 
 bool do_open = false;
 bool do_lock = false;
@@ -476,6 +476,7 @@ void SetupWifi()
    if (WiFi.status() == WL_CONNECTED)
    {
      Serial.println("# WIFI: connected to SSiD: " + WiFi.SSID());
+     wifiActive = true;
    } 
    int maxWait=100;
    while (WiFi.status() != WL_CONNECTED) {
@@ -552,19 +553,20 @@ void loop() {
 
 Portal.handleClient();  
 
-// This statement will declare pin 0 as digital input 
-pinMode(PushButton, INPUT);
-// digitalRead function stores the Push button state 
-// in variable push_button_state
-int Push_button_state = digitalRead(PushButton);
-// if condition checks if push button is pressed
-// if pressed Lock will toggle state
-
-if (Push_button_state == LOW && WiFi.status() == WL_CONNECTED)
-{ 
-  do_toggle = true;
-   
-}
+// remove comments from the next lines if you want to use a GPIO button to toggle the lock
+// // This statement will declare pin 0 as digital input 
+// pinMode(PushButton, INPUT);
+// // digitalRead function stores the Push button state 
+// // in variable push_button_state
+// int Push_button_state = digitalRead(PushButton);
+// // if condition checks if push button is pressed
+// // if pressed Lock will toggle state
+// 
+// if (Push_button_state == LOW && WiFi.status() == WL_CONNECTED)
+// { 
+//   do_toggle = true;
+//    
+// }
 // Wifi reconnect
 if (wifiActive)
 {
@@ -601,7 +603,7 @@ if (wifiActive)
     }
   }
 }
-if (do_open || do_lock || do_unlock || do_status || do_toggle || do_pair) 
+if ((do_open || do_lock || do_unlock || do_status || do_toggle || do_pair) && (keyble != NULL))
 {
   String str_task="working";
   char charBuffer4[8];
@@ -613,7 +615,8 @@ if (do_open || do_lock || do_unlock || do_status || do_toggle || do_pair)
   Serial.println(charBuffer4);
   mqtt_pub2 = charBuffer4;
   delay(200);
-  SetWifi(false);
+  // WiFi disconnect is not necessary when using NimBLE
+  // SetWifi(false);
   yield();
   waitForAnswer=true;
   keyble->_LockStatus = -1;
@@ -732,17 +735,21 @@ if (do_open || do_lock || do_unlock || do_status || do_toggle || do_pair)
       if(finished)
       {
         Serial.println("# Done!");
-        do
-        {
-          keyble->bleClient->disconnect();
-          delay(100);
-        }
-        while(keyble->state.connectionState != DISCONNECTED && !timeout);
+        // Keep BLE connected, if you want to (keylock stays much more responsive, but drains more battery)
+        // NOTE: you have to do at least a status query within 4 min (eg. 3 min 50 sec), because the keylock disconnects after 4 min of inactivity.
+        // This is not yet done in this code example. Please do it on your own, if you want to.
+        // do
+        // {
+        //   keyble->bleClient->disconnect();
+        //   delay(100);
+        // }
+        // while(keyble->state.connectionState != DISCONNECTED && !timeout);
 
         delay(100);
         yield();
           
-        SetWifi(true);
+        // WiFi disconnect is not necessary when using NimBLE
+        // SetWifi(true);
         
         statusUpdated=true;
         waitForAnswer=false;

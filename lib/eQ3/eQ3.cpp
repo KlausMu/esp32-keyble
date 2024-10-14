@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <string>
-#include <BLEDevice.h>
+#include <NimBLEDevice.h>
 #include <ctime>
 #include <sstream>
 #include "eQ3.h"
@@ -47,15 +47,21 @@ eQ3::eQ3(std::string ble_address, std::string user_key, unsigned char user_id) {
     bleScan = BLEDevice::getScan();
     bleScan->setAdvertisedDeviceCallbacks(this);
     bleScan->setActiveScan(true);
-    bleScan->setInterval(160);
-    bleScan->setWindow(200);
-    
+    /*
+      Original values bleScan->setInterval(160); and bleScan->setWindow(200); do not work with NimBLE. Not surprising, due to this comment:
+      m_scan_params.itvl               = 0; // This is defined as the time interval from when the Controller started its last LE scan until it begins the subsequent LE scan. (units=0.625 msec)
+      m_scan_params.window             = 0; // The duration of the LE scan. LE_Scan_Window shall be less than or equal to LE_Scan_Interval (units=0.625 msec)
+    */
+    bleScan->setInterval(45);
+    bleScan->setWindow(15);
 
     // TODO move this out to an extra init?
     bleClient = BLEDevice::createClient();
     bleClient->setClientCallbacks((BLEClientCallbacks *)this);
 
     // pin to core 1 (where the Arduino main loop resides), priority 1
+    // onTick() waits until BLEscan found the eQ3 (state.connectionState == FOUND).
+    // After it was found, bleClient->connect(BLEAddress(address)) is called
     xTaskCreatePinnedToCore(&tickTask, "worker", 10000, this, 1, nullptr, 1);
 }
 
@@ -89,7 +95,7 @@ bool eQ3::onTick() {
     if (xSemaphoreTake(mutex, 0)) {
         if (state.connectionState == FOUND) {
             Serial.println("# Connecting in tick");
-            bleClient->connect(BLEAddress(address), BLE_ADDR_TYPE_PUBLIC);
+            bleClient->connect(BLEAddress(address));
         } else if (state.connectionState == CONNECTING) {
             Serial.println("# Connected in tick");
             BLERemoteService *comm;
@@ -97,7 +103,13 @@ bool eQ3::onTick() {
             sendChar = comm->getCharacteristic(BLEUUID(BLE_UUID_WRITE)); // write buffer characteristic
             recvChar = comm->getCharacteristic(BLEUUID(BLE_UUID_READ)); // read buffer characteristic
             //recvChar->setNotifyCallbacks((BLERemoteCharacteristicCallbacks*)this);
-            recvChar->registerForNotify(&notify_func);
+            if(recvChar->canNotify()) {
+                if(!recvChar->subscribe(true, &notify_func)) {
+                    /** Disconnect if subscribe failed */
+                    bleClient->disconnect();
+                    return false;
+                }
+            }
             lastActivity = time(NULL);
             state.connectionState = CONNECTED;
             auto queueFunc = queue.find(CONNECTED);
@@ -106,7 +118,7 @@ bool eQ3::onTick() {
                 //xSemaphoreGive(mutex); // function will take the semaphore again
                 queueFunc->second();
             }
-        } else {
+        } else if (state.connectionState != DISCONNECTED) {
             sendNextFragment();
             lastActivity = time(NULL);
         }
@@ -123,17 +135,19 @@ bool eQ3::onTick() {
 // -----------------------------------------------------------------------------
 // --[onResult]-----------------------------------------------------------------
 // -----------------------------------------------------------------------------
-void eQ3::onResult(BLEAdvertisedDevice advertisedDevice) {
-    if (advertisedDevice.getAddress().toString() == address) { // TODO: Make name and address variable
+void eQ3::onResult(BLEAdvertisedDevice* advertisedDevice) {
+    if (advertisedDevice->getAddress().toString() == address) { // TODO: Make name and address variable
         Serial.print("# Found device: ");
-        Serial.println(advertisedDevice.getAddress().toString().c_str());
+        Serial.println(advertisedDevice->getAddress().toString().c_str());
         Serial.print("# RSSI: ");
-        Serial.println(advertisedDevice.getRSSI());
-        _RSSI = advertisedDevice.getRSSI();
+        Serial.println(advertisedDevice->getRSSI());
+        _RSSI = advertisedDevice->getRSSI();
         bleScan->stop();
         state.connectionState = FOUND;
+    } else {
+        Serial.print("# Found device, but wrong one: ");
+        Serial.println(advertisedDevice->getAddress().toString().c_str());
     }
- 
 }
 
 // -----------------------------------------------------------------------------
@@ -162,7 +176,7 @@ void eQ3::exchangeNonces() {
 // -----------------------------------------------------------------------------
 void eQ3::connect() {
     state.connectionState = SCANNING;
-    bleScan->start(25, nullptr, false);
+    bleScan->start(SCAN_TIMEOUT, nullptr, false);
     Serial.println("# Searching ...");
     //state.connectionState = FOUND;
     //Serial.println("connecting directly...");
