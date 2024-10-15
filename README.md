@@ -1,4 +1,17 @@
 # esp32-keyble
+## changes in this fork
+Changes in this fork compared to https://github.com/lumokitho/
+* <a href="https://github.com/h2zero/NimBLE-Arduino">NimBLE</a> is used as bluetooth stack. With this, both WiFi and BLE can be active at the same time
+* some smaller changes in the eQ3 library to improve stability
+* in file `main.cpp`
+  * WiFi is kept active
+  * BLE connection to the keylock is kept active. Doing so, the keylock stays very responsive, but drains more battery.
+  * use of a hardware button connected to GPIO is commented out, because it constantly triggered if no button was connected to the GPIO
+* Libraries "ArduinoJson", "AutoConnect", "PageBuilder", and "PubSubClient" are no longer saved as copies in folder "lib", but latest versions are retrieved from GitHub
+* esp32 partition table `partitions_ble.csv` was removed (was no longer valid) and replaced with `no_ota.csv` (because of size of the firmware). OTA is no longer possible
+
+## original description
+
 ESP32 port of the keyble library
 working, with some additions!
 
