@@ -60,6 +60,9 @@ int rssi = 0;
 
 const int PushButton = 0;
 
+unsigned long previousMillisStatus = 0;
+unsigned long intervalStatus = 230000; // 230000 3 min 50 sec, keylock disconnects after 4 min of inactivity
+
 String  MqttServerName;
 String  MqttPort;
 String  MqttUserName;
@@ -735,9 +738,8 @@ if ((do_open || do_lock || do_unlock || do_status || do_toggle || do_pair) && (k
       if(finished)
       {
         Serial.println("# Done!");
-        // Keep BLE connected, if you want to (keylock stays much more responsive, but drains more battery)
-        // NOTE: you have to do at least a status query within 4 min (eg. 3 min 50 sec), because the keylock disconnects after 4 min of inactivity.
-        // This is not yet done in this code example. Please do it on your own, if you want to.
+        // Keep BLE connected, if you want to. After 4 min of inactivity the keylock disconnects anyway.
+        // If you want the keylock to be always connected, see the code below (previousMillisStatus)
         // do
         // {
         //   keyble->bleClient->disconnect();
@@ -756,4 +758,16 @@ if ((do_open || do_lock || do_unlock || do_status || do_toggle || do_pair) && (k
       }
     }
   }
+
+  // You can keep the connection to the keylock open, if you regularly query the status.
+  // The keylock disconnects after 4 min of inactivity, so you have to query the status after let's say 3:50 min
+  // Doing so, the keylock stays much more responsive, but drains more battery.
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillisStatus >= intervalStatus)
+  {
+    previousMillisStatus = currentMillis;
+    
+    do_status = true;
+  }
+
 }
