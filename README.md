@@ -2,7 +2,7 @@
 ## changes in this fork
 Changes in this fork compared to https://github.com/lumokitho/
 * <a href="https://github.com/h2zero/NimBLE-Arduino">NimBLE</a> is used as bluetooth stack. With this, both WiFi and BLE can be active at the same time
-* some smaller changes in the eQ3 library to improve stability
+* some smaller changes in the eQ3 library to improve stability  (see <a href="https://github.com/lumokitho/esp32-keyble/issues/2">here</a> and <a href="https://github.com/lumokitho/esp32-keyble/issues/3">here</a>)
 * in file `main.cpp`
   * WiFi is kept active
   * BLE connection to the keylock is kept active. Doing so, the keylock stays very responsive, but drains more battery
